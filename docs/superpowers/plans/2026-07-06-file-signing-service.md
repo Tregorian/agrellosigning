@@ -977,9 +977,9 @@ curl -s -F "file=@/tmp/sample.txt" http://localhost:8080/api/sign > /tmp/resp.js
 python -c "import json;open('/tmp/sample.p7s','wb').write(__import__('base64').b64decode(json.load(open('/tmp/resp.json'))['signatureBase64']))"
 curl -s http://localhost:8080/api/certificate > /tmp/cert.pem
 # verify with openssl
-openssl cms -verify -binary -content /tmp/sample.txt -in /tmp/sample.p7s -inform DER -CAfile /tmp/cert.pem -no_signer_cert_verify
+openssl cms -verify -binary -content /tmp/sample.txt -in /tmp/sample.p7s -inform DER -CAfile /tmp/cert.pem -noverify
 ```
-Expected: `Verification successful` (or `CMS Verification successful`). Then stop the server. (`-no_signer_cert_verify` accepts the self-signed demo cert as its own trust anchor.)
+Expected: `Verification successful` (or `CMS Verification successful`). Then stop the server. (`-noverify` accepts the self-signed demo cert as its own trust anchor.)
 
 - [ ] **Step 8: Commit**
 
@@ -1391,7 +1391,7 @@ export function ResultPanel({ result, originalFile }: { result: SignResponse; or
 curl -s http://localhost:8080/api/certificate > cert.pem
 openssl cms -verify -binary -content "${result.fileName}" \\
   -in "${result.fileName}.p7s" -inform DER \\
-  -CAfile cert.pem -no_signer_cert_verify`}</code>
+  -CAfile cert.pem -noverify`}</code>
     </div>
   );
 }
@@ -1646,7 +1646,7 @@ Open `http://localhost:3000`, sign a file, click "Verify this signature" → gre
 ```bash
 curl -s http://localhost:3000/api/certificate > cert.pem
 # (sign a file via the UI, download its .p7s next to the original), then:
-openssl cms -verify -binary -content <original> -in <original>.p7s -inform DER -CAfile cert.pem -no_signer_cert_verify
+openssl cms -verify -binary -content <original> -in <original>.p7s -inform DER -CAfile cert.pem -noverify
 ```
 Expected: `Verification successful`. Stop with `docker compose down`.
 
@@ -1672,7 +1672,7 @@ git commit -m "feat: dockerize backend and frontend with compose"
   - **Quick start (Docker):** `docker compose up --build`, then open `http://localhost:3000`.
   - **Quick start (native):** backend `cd backend && ./gradlew run`; frontend `cd frontend && npm install && npm run dev`.
   - **What gets signed** — the raw uploaded file bytes; signature is detached (`.p7s`, DER); SHA-256 shown as the file fingerprint.
-  - **Verify it yourself** — the exact `openssl cms -verify ... -no_signer_cert_verify` command, plus a note that `/api/certificate` returns the signer certificate as PEM.
+  - **Verify it yourself** — the exact `openssl cms -verify ... -noverify` command, plus a note that `/api/certificate` returns the signer certificate as PEM.
   - **Standard used** — CMS/CAdES-BES (RFC 5652 + ETSI EN 319 122), detached, with signed attributes: content-type, message-digest, signing-time, signing-certificate-v2.
   - **Key & certificate handling** — `SigningKeyProvider` seam; demo keystore is a labeled throwaway; env vars `SIGNING_KEYSTORE_PATH/PASSWORD/ALIAS`; production would inject via a secret manager or use HSM/KMS.
   - **Architecture** — monorepo layout, stateless backend, request flow.
