@@ -16,4 +16,8 @@ data class AppConfig(
             port = System.getenv("SERVER_PORT")?.toInt() ?: 8080,
         )
     }
+
+    override fun toString(): String =
+        "AppConfig(keystorePath=$keystorePath, keystorePassword=***, keyAlias=$keyAlias, " +
+            "maxUploadBytes=$maxUploadBytes, port=$port)"
 }

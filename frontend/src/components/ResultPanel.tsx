@@ -28,6 +28,7 @@ export function ResultPanel({ result, originalFile }: { result: SignResponse; or
 
   const runVerify = async () => {
     setVerifyError(null);
+    setVerification(null);
     setVerifying(true);
     try {
       setVerification(await verifyFile(originalFile, signatureBlob));
@@ -68,7 +69,7 @@ export function ResultPanel({ result, originalFile }: { result: SignResponse; or
 
       <p className="subtitle" style={{ marginTop: 24 }}>Verify it yourself with OpenSSL:</p>
       <code className="block">{`# save the downloaded .p7s next to your original file, then:
-curl -s http://localhost:8080/api/certificate > cert.pem
+curl -s ${window.location.origin}/api/certificate > cert.pem
 openssl cms -verify -binary -content "${result.fileName}" \\
   -in "${result.fileName}.p7s" -inform DER \\
   -CAfile cert.pem -noverify`}</code>
