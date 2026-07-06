@@ -21,13 +21,36 @@ import java.time.Clock
 import java.time.Instant
 import java.util.Date
 
+/**
+ * Kotlin data-class `equals`/`hashCode` use identity comparison for [ByteArray],
+ * so we override both to give content-based equality for [signatureDer].
+ */
 data class SignatureResult(
     val signatureDer: ByteArray,
     val sha256Hex: String,
     val signerSubject: String,
     val signingTime: Instant,
     val signatureAlgorithm: String,
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is SignatureResult) return false
+        return signatureDer.contentEquals(other.signatureDer) &&
+            sha256Hex == other.sha256Hex &&
+            signerSubject == other.signerSubject &&
+            signingTime == other.signingTime &&
+            signatureAlgorithm == other.signatureAlgorithm
+    }
+
+    override fun hashCode(): Int {
+        var result = signatureDer.contentHashCode()
+        result = 31 * result + sha256Hex.hashCode()
+        result = 31 * result + signerSubject.hashCode()
+        result = 31 * result + signingTime.hashCode()
+        result = 31 * result + signatureAlgorithm.hashCode()
+        return result
+    }
+}
 
 /**
  * Produces a detached CMS/CAdES-BES signature over the given content.
