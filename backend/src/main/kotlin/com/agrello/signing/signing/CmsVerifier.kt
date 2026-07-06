@@ -1,5 +1,6 @@
 package com.agrello.signing.signing
 
+import org.bouncycastle.asn1.ASN1ObjectIdentifier
 import org.bouncycastle.asn1.cms.CMSAttributes
 import org.bouncycastle.cert.X509CertificateHolder
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
@@ -7,6 +8,7 @@ import org.bouncycastle.cms.CMSProcessableByteArray
 import org.bouncycastle.cms.CMSSignedData
 import org.bouncycastle.cms.SignerInformation
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder
+import org.bouncycastle.operator.DefaultAlgorithmNameFinder
 import org.bouncycastle.util.Selector
 import java.time.Instant
 
@@ -23,6 +25,26 @@ data class VerificationResult(
  * certificate embedded in the signature. Stateless; safe to call concurrently.
  */
 class CmsVerifier {
+    private val algorithmFinder = DefaultAlgorithmNameFinder()
+
+    private fun deriveSignatureAlgorithm(signer: SignerInformation): String {
+        val encryptionName = runCatching {
+            algorithmFinder.getAlgorithmName(ASN1ObjectIdentifier(signer.encryptionAlgOID))
+        }.getOrNull()
+
+        // If the encryption OID already resolves to a combined name (e.g. "SHA256WITHECDSA"),
+        // use it directly to avoid redundantly prepending the digest algorithm.
+        if (encryptionName != null && encryptionName.contains("WITH", ignoreCase = true)) {
+            return encryptionName
+        }
+
+        val digestName = runCatching {
+            algorithmFinder.getAlgorithmName(ASN1ObjectIdentifier(signer.digestAlgOID))
+        }.getOrNull() ?: signer.digestAlgOID
+
+        return "${digestName}with${encryptionName ?: signer.encryptionAlgOID}"
+    }
+
     fun verify(content: ByteArray, signatureDer: ByteArray): VerificationResult {
         return try {
             val signedData = CMSSignedData(CMSProcessableByteArray(content), signatureDer)
@@ -46,7 +68,7 @@ class CmsVerifier {
                 valid = valid,
                 signerSubject = certificate.subjectX500Principal.name,
                 signingTime = signingTime,
-                signatureAlgorithm = "SHA256withECDSA",
+                signatureAlgorithm = deriveSignatureAlgorithm(signer),
                 reason = if (valid) null else "Signature does not match content",
             )
         } catch (e: Exception) {
