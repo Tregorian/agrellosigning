@@ -1,0 +1,18 @@
+services:
+  backend:
+    build: ./backend
+    environment:
+      SERVER_PORT: 8080
+      SIGNING_KEYSTORE_PATH: keys/demo-keystore.p12
+      SIGNING_KEYSTORE_PASSWORD: ${SIGNING_KEYSTORE_PASSWORD:-changeit}
+      SIGNING_KEY_ALIAS: ${SIGNING_KEY_ALIAS:-signing}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-26214400}
+    expose:
+      - "8080"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
