@@ -18,7 +18,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.security.Security
 
 fun main() {
-    Security.addProvider(BouncyCastleProvider())
+    if (Security.getProvider("BC") == null) Security.addProvider(BouncyCastleProvider())
     val config = AppConfig.fromEnv()
     embeddedServer(Netty, port = config.port, host = "0.0.0.0") { module() }.start(wait = true)
 }

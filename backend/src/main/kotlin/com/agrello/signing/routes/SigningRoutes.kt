@@ -57,6 +57,7 @@ fun Route.signingRoutes(
     keyProvider: SigningKeyProvider,
 ) {
     post("/api/sign") {
+        // formFieldLimit bounds form-field (text) parts; the actual file-size cap is enforced by readRemaining(...) + size check in readFilePart.
         val file = readFilePart(call.receiveMultipart(formFieldLimit = config.maxUploadBytes + 1), "file", config.maxUploadBytes)
         if (file == null) {
             call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing or too-large 'file' part"))
@@ -79,19 +80,28 @@ fun Route.signingRoutes(
     }
 
     post("/api/verify") {
+        // formFieldLimit bounds form-field (text) parts; the actual file-size cap is enforced by readRemaining(...) + size check below.
         val multipart = call.receiveMultipart(formFieldLimit = config.maxUploadBytes + 1)
-        var fileName: String? = null
         var content: ByteArray? = null
         var signatureDer: ByteArray? = null
+        var tooLarge = false
         multipart.forEachPart { part ->
             if (part is PartData.FileItem) {
                 val data = part.provider().readRemaining(config.maxUploadBytes + 1).readByteArray()
-                when (part.name) {
-                    "file" -> { fileName = part.originalFileName; content = data }
-                    "signature" -> signatureDer = data
+                if (data.size > config.maxUploadBytes) {
+                    tooLarge = true
+                } else {
+                    when (part.name) {
+                        "file" -> content = data
+                        "signature" -> signatureDer = data
+                    }
                 }
             }
             part.dispose()
+        }
+        if (tooLarge) {
+            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Uploaded part exceeds maximum size"))
+            return@post
         }
         if (content == null || signatureDer == null) {
             call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Both 'file' and 'signature' parts are required"))
