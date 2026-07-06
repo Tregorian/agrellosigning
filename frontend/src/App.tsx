@@ -37,7 +37,10 @@ export function App() {
       <div className="panel">
         <div
           className={`dropzone ${drag ? "drag" : ""}`}
+          role="button"
+          tabIndex={0}
           onClick={() => inputRef.current?.click()}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); inputRef.current?.click(); } }}
           onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
           onDragLeave={() => setDrag(false)}
           onDrop={(e) => { e.preventDefault(); setDrag(false); choose(e.dataTransfer.files[0] ?? null); }}

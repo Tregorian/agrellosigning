@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { verifyFile, base64ToBlob, type SignResponse, type VerifyResponse } from "../api";
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -13,8 +13,9 @@ function Row({ label, value }: { label: string; value: string }) {
 export function ResultPanel({ result, originalFile }: { result: SignResponse; originalFile: File }) {
   const [verification, setVerification] = useState<VerifyResponse | null>(null);
   const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
-  const signatureBlob = base64ToBlob(result.signatureBase64);
+  const signatureBlob = useMemo(() => base64ToBlob(result.signatureBase64), [result.signatureBase64]);
 
   const download = () => {
     const url = URL.createObjectURL(signatureBlob);
@@ -22,13 +23,16 @@ export function ResultPanel({ result, originalFile }: { result: SignResponse; or
     a.href = url;
     a.download = `${result.fileName}.p7s`;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   const runVerify = async () => {
+    setVerifyError(null);
     setVerifying(true);
     try {
       setVerification(await verifyFile(originalFile, signatureBlob));
+    } catch (e) {
+      setVerifyError(e instanceof Error ? e.message : "Verification failed");
     } finally {
       setVerifying(false);
     }
@@ -36,7 +40,7 @@ export function ResultPanel({ result, originalFile }: { result: SignResponse; or
 
   return (
     <div className="panel">
-      <h1>Signature created</h1>
+      <h2>Signature created</h2>
       <Row label="File" value={result.fileName} />
       <Row label="SHA-256" value={result.sha256Hex} />
       <Row label="Signer" value={result.signerSubject} />
@@ -50,6 +54,8 @@ export function ResultPanel({ result, originalFile }: { result: SignResponse; or
           {verifying ? "Verifying…" : "Verify this signature"}
         </button>
       </div>
+
+      {verifyError && <div className="error">{verifyError}</div>}
 
       {verification && (
         <div style={{ marginTop: 16 }}>
