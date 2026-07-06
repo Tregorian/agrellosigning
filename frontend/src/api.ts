@@ -20,7 +20,10 @@ export async function signFile(file: File): Promise<SignResponse> {
   const form = new FormData();
   form.append("file", file);
   const res = await fetch("/api/sign", { method: "POST", body: form });
-  if (!res.ok) throw new Error((await res.json()).error ?? "Signing failed");
+  if (!res.ok) {
+    const msg = await res.json().then((j) => j.error).catch(() => null);
+    throw new Error(msg ?? `Signing failed (HTTP ${res.status})`);
+  }
   return res.json();
 }
 
@@ -29,7 +32,10 @@ export async function verifyFile(file: File, signature: Blob): Promise<VerifyRes
   form.append("file", file);
   form.append("signature", signature, "signature.p7s");
   const res = await fetch("/api/verify", { method: "POST", body: form });
-  if (!res.ok) throw new Error((await res.json()).error ?? "Verification failed");
+  if (!res.ok) {
+    const msg = await res.json().then((j) => j.error).catch(() => null);
+    throw new Error(msg ?? `Verification failed (HTTP ${res.status})`);
+  }
   return res.json();
 }
 
