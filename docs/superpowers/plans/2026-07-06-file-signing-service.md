@@ -1523,7 +1523,8 @@ WORKDIR /app
 COPY settings.gradle.kts build.gradle.kts gradle.properties ./
 COPY src ./src
 COPY keys ./keys
-RUN gradle installDist --no-daemon
+# Run tests as part of the build: a failing test blocks a runnable image (quality gate).
+RUN gradle test installDist --no-daemon
 
 # --- runtime stage ---
 FROM eclipse-temurin:21-jre
@@ -1629,12 +1630,17 @@ MAX_UPLOAD_BYTES=26214400
 .DS_Store
 ```
 
-- [ ] **Step 9: Build and run the full stack**
+- [ ] **Step 9: Run the backend tests via Docker (no local JDK needed)**
+
+Run: `docker run --rm -v "$PWD/backend:/app" -w /app gradle:8.11-jdk21 gradle test --no-daemon`
+Expected: all backend tests PASS. (This is the documented "run tests without a toolchain" command.)
+
+- [ ] **Step 10: Build and run the full stack**
 
 Run: `docker compose up --build`
-Expected: both images build; frontend serves on `http://localhost:3000`.
+Expected: both images build (backend build runs `gradle test` and fails fast if any test fails); frontend serves on `http://localhost:3000`.
 
-- [ ] **Step 10: End-to-end verification**
+- [ ] **Step 11: End-to-end verification**
 
 Open `http://localhost:3000`, sign a file, click "Verify this signature" → green valid badge. Then confirm independent verification:
 ```bash
@@ -1644,7 +1650,7 @@ openssl cms -verify -binary -content <original> -in <original>.p7s -inform DER -
 ```
 Expected: `Verification successful`. Stop with `docker compose down`.
 
-- [ ] **Step 11: Commit**
+- [ ] **Step 12: Commit**
 
 ```bash
 git add backend/Dockerfile backend/.dockerignore frontend/Dockerfile frontend/nginx.conf frontend/.dockerignore docker-compose.yml .env.example .gitignore
@@ -1671,7 +1677,9 @@ git commit -m "feat: dockerize backend and frontend with compose"
   - **Key & certificate handling** — `SigningKeyProvider` seam; demo keystore is a labeled throwaway; env vars `SIGNING_KEYSTORE_PATH/PASSWORD/ALIAS`; production would inject via a secret manager or use HSM/KMS.
   - **Architecture** — monorepo layout, stateless backend, request flow.
   - **Performance & concurrency** — stateless → horizontal scaling; `MAX_UPLOAD_BYTES` bounds memory; CPU-bound signing offloaded to `Dispatchers.Default`; per-request crypto objects (thread-safety); note that very large files would use `CMSSignedDataStreamGenerator` to stream; HSM/KMS latency and connection pooling as the production scaling dimension.
-  - **Testing** — `cd backend && ./gradlew test`; what the tests cover (round-trip, tamper detection, route response).
+  - **Testing** — two paths: native `cd backend && ./gradlew test`, or **no local toolchain required** via Docker:
+    `docker run --rm -v "$PWD/backend:/app" -w /app gradle:8.11-jdk21 gradle test --no-daemon`.
+    Also note tests run automatically during the Docker image build (`docker compose up --build` fails if any test fails). Cover: sign→verify round-trip, tamper detection, route response, keystore load.
   - **Deliberate scope cuts** — auth, persistence, TSA timestamping, real CA certs — with a one-line "what production adds" (TSA for trusted time, HSM/KMS for keys).
 
 - [ ] **Step 2: Verify both quick-start paths actually work** by following the README steps literally (Docker path at minimum).
