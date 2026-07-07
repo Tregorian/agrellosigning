@@ -23,31 +23,26 @@ import kotlinx.io.readByteArray
 import java.util.Base64
 
 /**
- * Reads a single named file part, enforcing maxBytes. Returns (fileName, bytes)
- * or null if the part is missing / too large.
+ * Reads the named file parts from a multipart body, enforcing maxBytes per part.
+ * Returns a map of partName -> (originalFileName, bytes) for the parts that were
+ * present, or null if any part exceeded maxBytes.
  */
-private suspend fun readFilePart(
+private suspend fun readFileParts(
     multipart: io.ktor.http.content.MultiPartData,
-    partName: String,
+    partNames: Set<String>,
     maxBytes: Long,
-): Pair<String, ByteArray>? {
-    var fileName: String? = null
-    var bytes: ByteArray? = null
+): Map<String, Pair<String, ByteArray>>? {
+    val parts = mutableMapOf<String, Pair<String, ByteArray>>()
     var tooLarge = false
     multipart.forEachPart { part ->
-        if (part is PartData.FileItem && part.name == partName) {
+        if (part is PartData.FileItem && part.name in partNames) {
             val data = part.provider().readRemaining(maxBytes + 1).readByteArray()
-            if (data.size > maxBytes) tooLarge = true else {
-                fileName = part.originalFileName ?: "upload"
-                bytes = data
-            }
+            if (data.size > maxBytes) tooLarge = true
+            else parts[part.name!!] = (part.originalFileName ?: "upload") to data
         }
         part.dispose()
     }
-    if (tooLarge) return null
-    val fn = fileName ?: return null
-    val b = bytes ?: return null
-    return fn to b
+    return if (tooLarge) null else parts
 }
 
 fun Route.signingRoutes(
@@ -57,10 +52,15 @@ fun Route.signingRoutes(
     keyProvider: SigningKeyProvider,
 ) {
     post("/api/sign") {
-        // formFieldLimit bounds form-field (text) parts; the actual file-size cap is enforced by readRemaining(...) + size check in readFilePart.
-        val file = readFilePart(call.receiveMultipart(formFieldLimit = config.maxUploadBytes + 1), "file", config.maxUploadBytes)
+        // formFieldLimit bounds form-field (text) parts; the actual file-size cap is enforced by readRemaining(...) + size check in readFileParts.
+        val parts = readFileParts(call.receiveMultipart(formFieldLimit = config.maxUploadBytes + 1), setOf("file"), config.maxUploadBytes)
+        if (parts == null) {
+            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Uploaded part exceeds maximum size"))
+            return@post
+        }
+        val file = parts["file"]
         if (file == null) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing or too-large 'file' part"))
+            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing 'file' part"))
             return@post
         }
         val (fileName, content) = file
@@ -80,34 +80,19 @@ fun Route.signingRoutes(
     }
 
     post("/api/verify") {
-        // formFieldLimit bounds form-field (text) parts; the actual file-size cap is enforced by readRemaining(...) + size check below.
-        val multipart = call.receiveMultipart(formFieldLimit = config.maxUploadBytes + 1)
-        var content: ByteArray? = null
-        var signatureDer: ByteArray? = null
-        var tooLarge = false
-        multipart.forEachPart { part ->
-            if (part is PartData.FileItem) {
-                val data = part.provider().readRemaining(config.maxUploadBytes + 1).readByteArray()
-                if (data.size > config.maxUploadBytes) {
-                    tooLarge = true
-                } else {
-                    when (part.name) {
-                        "file" -> content = data
-                        "signature" -> signatureDer = data
-                    }
-                }
-            }
-            part.dispose()
-        }
-        if (tooLarge) {
+        // formFieldLimit bounds form-field (text) parts; the actual file-size cap is enforced by readRemaining(...) + size check in readFileParts.
+        val parts = readFileParts(call.receiveMultipart(formFieldLimit = config.maxUploadBytes + 1), setOf("file", "signature"), config.maxUploadBytes)
+        if (parts == null) {
             call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Uploaded part exceeds maximum size"))
             return@post
         }
+        val content = parts["file"]?.second
+        val signatureDer = parts["signature"]?.second
         if (content == null || signatureDer == null) {
             call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Both 'file' and 'signature' parts are required"))
             return@post
         }
-        val result = withContext(Dispatchers.Default) { verifier.verify(content!!, signatureDer!!) }
+        val result = withContext(Dispatchers.Default) { verifier.verify(content, signatureDer) }
         call.respond(
             VerifyResponse(
                 valid = result.valid,
