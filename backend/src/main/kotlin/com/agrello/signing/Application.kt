@@ -12,6 +12,8 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.UnsupportedMediaTypeException
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
@@ -37,9 +39,20 @@ fun Application.module() {
     val verifier = CmsVerifier()
 
     install(StatusPages) {
+        // Client errors: bad/missing request content. Safe to echo the message.
+        exception<UnsupportedMediaTypeException> { call, cause ->
+            appLogger.info("Unsupported media type: {}", cause.message)
+            call.respond(HttpStatusCode.UnsupportedMediaType, mapOf("error" to "Expected a multipart/form-data request"))
+        }
+        exception<BadRequestException> { call, cause ->
+            appLogger.info("Bad request: {}", cause.message)
+            call.respond(HttpStatusCode.BadRequest, mapOf("error" to (cause.message ?: "Bad request")))
+        }
+        // Everything else is a server fault: log the stack trace, return a
+        // generic 500 without leaking internals to the client.
         exception<Throwable> { call, cause ->
             appLogger.error("Unhandled error", cause)
-            call.respond(HttpStatusCode.BadRequest, mapOf("error" to (cause.message ?: "Bad request")))
+            call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Internal server error"))
         }
     }
     install(ContentNegotiation) { json() }

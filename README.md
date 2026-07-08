@@ -205,9 +205,6 @@ a production-ready service. Known gaps, stated plainly:
 
 - **CORS** uses `anyHost()` for convenience. Production would restrict this to
   a known set of allowed origins.
-- **Error handling** currently maps all uncaught exceptions to HTTP 400 via a
-  single StatusPages handler. Production would use a tiered handler that
-  distinguishes client errors (4xx) from server faults (5xx).
 - **Docker base images** are pinned to major versions only. Production builds
   would pin exact patch versions or digests for reproducibility.
 - **Signing key** is a committed, self-signed throwaway (see above). Production

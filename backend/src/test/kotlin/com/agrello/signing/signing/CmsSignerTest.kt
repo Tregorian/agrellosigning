@@ -24,8 +24,11 @@ class CmsSignerTest {
         val content = "hello agrello".toByteArray()
         val result = signer().sign(content)
 
-        // SHA-256 of "hello agrello"
-        assertEquals(64, result.sha256Hex.length)
+        assertEquals(
+            "19ad54dbcfba08062cd9f423147b400588e1a06b862f8cf4021ecfc5756feea3",
+            result.sha256Hex,
+            "sha256Hex should be the SHA-256 of the content",
+        )
         assertTrue(result.signerSubject.contains("Agrello Demo Signer"))
         assertEquals("SHA256withECDSA", result.signatureAlgorithm)
         assertTrue(result.signatureDer.isNotEmpty())

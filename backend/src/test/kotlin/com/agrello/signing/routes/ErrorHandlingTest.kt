@@ -9,9 +9,9 @@ import kotlin.test.assertEquals
 
 class ErrorHandlingTest {
     @Test
-    fun `sign with no multipart returns 400`() = testApplication {
+    fun `sign with no multipart body returns 415`() = testApplication {
         application { module() }
         val response = client.post("/api/sign")
-        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertEquals(HttpStatusCode.UnsupportedMediaType, response.status)
     }
 }
