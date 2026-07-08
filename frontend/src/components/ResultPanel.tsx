@@ -68,7 +68,8 @@ export function ResultPanel({ result, originalFile }: { result: SignResponse; or
       )}
 
       <p className="subtitle" style={{ marginTop: 24 }}>Verify it yourself with OpenSSL:</p>
-      <code className="block">{`# save the downloaded .p7s next to your original file, then:
+      <code className="block">{`# run in bash (macOS/Linux terminal, or Git Bash on Windows — not PowerShell):
+# save the downloaded .p7s next to your original file, then:
 curl -s ${window.location.origin}/api/certificate > cert.pem
 openssl cms -verify -binary -content "${result.fileName}" \\
   -in "${result.fileName}.p7s" -inform DER \\
